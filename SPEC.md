@@ -272,7 +272,11 @@ v2 上線時，Worker 增加第二種模式：
 - v1 不需要實作此端點
 
 ### 9.7 並發與速率限制
-- **IP rate limit**：於 Cloudflare dashboard 設定（不寫進程式碼，方便調整）；建議 20 req/min/IP；超過回 429
+- **IP rate limit**：Worker 內 in-memory Map 實作（per-isolate state），每 IP 60s/10 次
+  - **限制**：Cloudflare 把同 IP 請求 split 到多 isolate，短 burst（< 30 req）攔截率低；持續攻擊（> 100 req/min）攔截率 ~20-40%
+  - 試過 `[[unsafe.bindings]]` 的 ratelimit binding（2026-05-27）：wrangler 顯示為 "Unsafe Metadata"，實際 `.limit()` 是 no-op，不採用
+  - **真正 global rate limit 需 Durable Object**（Workers Paid plan $5/月）；本期 v1.0 不升級
+- **🔑 Cost burn 第一道防線**：**Anthropic Console 的 monthly spending limit**——硬性月度上限，超過就停服務、不會無限燒錢。**必須設定**
 - **前端並發控制**：等待 Worker 回應期間禁用搜尋按鈕，避免使用者連點觸發重複呼叫
 - **Worker 自身**：依賴 Cloudflare 自動 scaling 處理流量尖峰；本程式不另做佇列或 throttle
 - **429 處理**：前端收到 429 → 顯示「請求太快，請稍等幾秒再試」+ 等 5 秒後重新啟用搜尋按鈕
@@ -426,3 +430,4 @@ v2 上線時，Worker 增加第二種模式：
 | 2026-05-26 | v1.2.1 修首次本機測試發現的兩個 bug：(1) **Drive Shared Drive 支援**：前端 `listFilesInFolder` / `readFileContent` 與 Worker `verifyDriveAccess` 全加 `supportsAllDrives=true`、列檔再加 `includeItemsFromAllDrives=true`——沒這兩個參數時 Shared Drive 內檔案會被靜默忽略（API 不報錯但回空陣列）；(2) **檔名解析增援西元年格式**：實際檔名是 `20260405【雅琴看世界】.txt` 而非預期 `1140520_記者會.txt`，parseFilename 改成同時支援西元年 8 位數（可選 `_` 或 `【】`）與民國年 7 位數兩種 |
 | 2026-05-27 | v1.2.2 自動化 smoke test 抓到 bug：**廣義按鈕無回饋**。原本用 `<button disabled>` 抑制了 click event，使用者點下完全沒反應、看不到「v2 開發中」提示。改用 `aria-disabled="true"` + CSS attribute selector：視覺仍顯示為不可用，但 click handler 能正常觸發 toast |
 | 2026-05-27 | **v1.0 正式上線**：(1) GitHub Pages 部署 `https://yyyyjc.github.io/transcript-search/`；(2) Google OAuth 加授權來源；(3) 線上 end-to-end smoke test 全綠；(4) §11 驗收條件 18/20 ✅（2 條 `[~]` 為「實作完但未實測」：1h token 過期 silent re-auth、多人並發）；(5) 補做：Worker 加 IP rate limit binding（每 IP 60s/20 次）；(6) 交付物完備：README.md、USER_GUIDE.md、announcement-template.md |
+| 2026-05-30 | v1.0.1 修 IP rate limit：原 `[[unsafe.bindings]]` 的 ratelimit binding 在 wrangler 4.94 顯示為 "Unsafe Metadata"、實際是 no-op，改用 in-memory Map（per-isolate）替代。實測短 burst 攔截率低、持續攻擊 ~20-40%。SPEC §9.7 強調 Cost burn 第一道防線應是 Anthropic Console spending limit（必設） |

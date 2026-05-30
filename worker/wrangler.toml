@@ -10,14 +10,9 @@ workers_dev = true
 preview_urls = true
 
 # === IP rate limit ===
-# 每個 IP 每 60 秒最多 20 次請求；超過 Worker 回 429
-# SPEC §7.1 Always do + §9.7 並發與速率限制
-# 文件：https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/
-[[unsafe.bindings]]
-name = "RATE_LIMITER"
-type = "ratelimit"
-namespace_id = "1001"          # 任意數字，namespace 內 unique 即可
-simple = { limit = 20, period = 60 }
+# 改用 worker.js 內 in-memory Map 實作（per-isolate）
+# 之前試 [[unsafe.bindings]] 的 ratelimit 在 wrangler 4.94 仍是 "Unsafe Metadata"
+# 沒實際攔截。要全球嚴格限速請改用 Durable Object 或 dashboard 設 account-level rule
 
 # === Secrets（在終端機用 wrangler secret put 設定，不寫進此檔）===
 # ANTHROPIC_API_KEY  — 必要

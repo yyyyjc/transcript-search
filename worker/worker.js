@@ -73,15 +73,13 @@ export default {
 
     try {
       // 0. IP rate limit（每 IP 每 60s 20 次；放在最前面攔截未授權的攻擊請求）
+      // 用 in-memory Map 實作（per-isolate state，攻擊者跨 POP 可繞，但對抗一般濫用足夠）
       const clientIp = request.headers.get("CF-Connecting-IP") || "unknown";
-      if (env.RATE_LIMITER) {
-        const { success } = await env.RATE_LIMITER.limit({ key: clientIp });
-        if (!success) {
-          return jsonResponse(
-            { error: "rate_limited", message: "請求太快，請稍等幾秒再試" },
-            429
-          );
-        }
+      if (!checkRateLimit(clientIp)) {
+        return jsonResponse(
+          { error: "rate_limited", message: "請求太快，請稍等幾秒再試" },
+          429
+        );
       }
 
       // 1. 取 OAuth token
@@ -193,6 +191,40 @@ function extractToken(request) {
   const auth = request.headers.get("Authorization") || "";
   const match = auth.match(/^Bearer\s+(.+)$/i);
   return match ? match[1].trim() : null;
+}
+
+/**
+ * In-memory rate limit per IP（per-isolate state）
+ * 每個 IP 60 秒內最多 10 次請求
+ *
+ * 注意（已實測 2026-05-30）：
+ * - Cloudflare 把同一 IP 的請求 split 到多個 isolate
+ * - 短 burst（< 30 req）保護力有限：每個 isolate 各自從 0 起算
+ * - 持續攻擊（> 100 req/min）有效：同一 isolate 會累積到上限
+ * - 真正 global rate limit 需 Durable Object（Workers Paid plan $5/mo）
+ *
+ * Cost burn 的真正第一道防線：Anthropic Console 的 monthly spending limit
+ */
+const _rateLimitHits = new Map();
+const RATE_LIMIT_WINDOW_MS = 60 * 1000;
+const RATE_LIMIT_MAX = 10;
+
+function checkRateLimit(ip) {
+  const now = Date.now();
+  const hits = (_rateLimitHits.get(ip) || []).filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
+  if (hits.length >= RATE_LIMIT_MAX) {
+    _rateLimitHits.set(ip, hits);
+    return false;
+  }
+  hits.push(now);
+  _rateLimitHits.set(ip, hits);
+  if (_rateLimitHits.size > 500) {
+    for (const [k, v] of _rateLimitHits) {
+      const fresh = v.filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
+      if (fresh.length === 0) _rateLimitHits.delete(k);
+    }
+  }
+  return true;
 }
 
 /**

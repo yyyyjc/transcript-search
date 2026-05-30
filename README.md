@@ -142,9 +142,17 @@ git push        # GitHub Pages 自動部署，約 1-2 分鐘生效
 - **OAuth scope 僅 `drive.readonly`** — 工具無法寫入、刪除、修改任何 Drive 內容
 - **Anthropic API key** 只存於 Cloudflare Worker secret（`wrangler secret put ANTHROPIC_API_KEY`），永不進前端 / git
 - **權限控管** 完全交給 Drive 既有分享名單；不自建白名單。Worker 收到請求時會拿使用者 token 反查 Drive 確認權限
-- **IP rate limit** 20 req/min/IP 防止 Worker URL 外洩後被當免費 Claude proxy
+- **IP rate limit** Worker in-memory Map（per-isolate；持續攻擊 ~20-40% 攔截）
+- **🔑 Anthropic Console monthly spending limit**（**維運者必設**）—— 真正的 cost burn 硬上限；到達自動停服，避免意外 / 攻擊燒爆預算
 
-詳見 [SPEC.md §7](SPEC.md) Boundaries。
+詳見 [SPEC.md §7](SPEC.md) Boundaries 與 [§9.7](SPEC.md) 並發與速率限制。
+
+### 第一次部署後必做：設定 Anthropic spending limit
+
+1. 開 https://console.anthropic.com/settings/limits
+2. **Monthly spend limit** 設一個你能接受的數字（建議 USD $20-50）
+3. 超過此額度後 API 會回 quota 用罄錯誤，前端會顯示「分析服務暫時失常」
+4. 用量正常情況遠低於此（v1.0 每月預估 $5-15）
 
 ---
 
