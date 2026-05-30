@@ -1,0 +1,16 @@
+{
+  "name": "transcript-search-worker",
+  "version": "1.0.0",
+  "description": "Cloudflare Worker — 逐字稿語料庫語意檢索後端",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail",
+    "secret:put": "wrangler secret put ANTHROPIC_API_KEY"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}

@@ -1,0 +1,934 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>逐字稿語料庫語意檢索</title>
+<style>
+  :root {
+    --bg: #f7f7f5;
+    --panel: #ffffff;
+    --border: #e5e5e0;
+    --text: #1a1a1a;
+    --muted: #6b6b6b;
+    --accent: #2563eb;
+    --accent-hover: #1d4ed8;
+    --pill-bg: #eef2ff;
+    --pill-text: #3730a3;
+    --ok: #16a34a;
+    --danger: #dc2626;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+    font-size: 15px; line-height: 1.55; }
+
+  header.app-header {
+    background: var(--panel); border-bottom: 1px solid var(--border);
+    padding: 16px 24px; display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; flex-wrap: wrap;
+  }
+  header.app-header h1 { margin: 0; font-size: 18px; font-weight: 600; }
+  header.app-header .subtitle { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  .auth-area { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .auth-area .user-email { font-size: 13px; color: var(--muted); max-width: 200px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  button {
+    font: inherit; cursor: pointer; border-radius: 6px; border: 1px solid var(--border);
+    background: var(--panel); padding: 7px 14px; color: var(--text);
+    transition: background 0.1s, border-color 0.1s, opacity 0.1s;
+  }
+  button:hover:not(:disabled) { background: #f0f0ec; }
+  button.primary { background: var(--accent); color: white; border-color: var(--accent); }
+  button.primary:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  button.small { padding: 3px 8px; font-size: 12px; }
+
+  main { max-width: 960px; margin: 0 auto; padding: 24px; }
+
+  .search-panel {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+    padding: 20px; margin-bottom: 16px;
+  }
+  .search-row { display: flex; gap: 10px; align-items: stretch; flex-wrap: wrap; }
+  .mode-toggle {
+    display: flex; gap: 0; border: 1px solid var(--border); border-radius: 6px;
+    overflow: hidden; align-self: stretch;
+  }
+  .mode-btn {
+    border: none; border-radius: 0; background: white; padding: 0 14px;
+    font-size: 13px; cursor: pointer; min-width: 64px;
+  }
+  .mode-btn.active { background: var(--accent); color: white; }
+  .mode-btn[aria-disabled="true"] { background: #f3f4f6; color: #9ca3af; cursor: not-allowed; }
+  .search-row input {
+    flex: 1; min-width: 200px; font: inherit; padding: 10px 14px;
+    border: 1px solid var(--border); border-radius: 6px; background: white; color: var(--text);
+  }
+  .search-row input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .search-row button.search { padding: 0 20px; }
+  .search-hint { font-size: 13px; color: var(--muted); margin-top: 10px; }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 12px;
+    background: var(--pill-bg); color: var(--pill-text); margin-right: 6px; }
+  .highlight-legend {
+    font-size: 12px; color: var(--muted); margin-top: 8px;
+    display: inline-flex; gap: 12px; align-items: center; flex-wrap: wrap;
+  }
+  .highlight-legend .swatch {
+    display: inline-block; padding: 1px 6px; border-radius: 2px; margin-right: 4px;
+  }
+  .highlight-legend .swatch.exact { background: #fecaca; color: #991b1b; font-weight: 600; }
+
+  .cost-bar {
+    background: #fafaf7; border: 1px solid var(--border); border-radius: 6px;
+    padding: 8px 14px; margin-bottom: 14px; font-size: 12.5px; color: var(--muted);
+    display: flex; gap: 18px; flex-wrap: wrap; align-items: center;
+  }
+  .cost-bar .cost-value { color: var(--text); font-family: ui-monospace, monospace; font-weight: 600; }
+  .cost-bar.hidden { display: none; }
+
+  .results-toolbar {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 12px; flex-wrap: wrap; gap: 8px;
+  }
+  .results-count { font-size: 14px; color: var(--muted); }
+
+  .card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+    padding: 16px 18px; margin-bottom: 12px;
+  }
+  .card-head {
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+    margin-bottom: 10px; flex-wrap: wrap;
+  }
+  .card-meta { font-size: 13px; color: var(--muted); }
+  .card-meta .date { color: var(--text); font-weight: 600; margin-right: 8px; }
+  .card-meta .occasion { color: var(--text); }
+  .card-meta .filename { color: #999; font-family: ui-monospace, monospace; font-size: 11px; margin-left: 8px; word-break: break-all; }
+  .pill.cat-program { background: #ede9fe; color: #5b21b6; }
+  .pill.cat-interview { background: #dcfce7; color: #166534; }
+  .drive-link {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 12px; color: var(--accent); text-decoration: none;
+    padding: 3px 8px; border: 1px solid var(--border); border-radius: 4px;
+    background: var(--panel); white-space: nowrap;
+  }
+  .drive-link:hover { background: #f0f0ec; }
+  .card-summary {
+    font-size: 14px; color: var(--text); margin-bottom: 10px;
+    padding: 8px 12px; background: #fafaf7; border-left: 3px solid var(--accent); border-radius: 4px;
+  }
+  .card-summary::before { content: "AI 摘要："; font-weight: 600; color: var(--muted); font-size: 12px; }
+  .excerpt-row { display: flex; align-items: flex-start; gap: 10px; flex-wrap: wrap; }
+  .excerpt-row .card-excerpt { flex: 1; min-width: 200px; }
+  .card-excerpt {
+    font-size: 14px; line-height: 1.7; color: #333;
+    padding: 4px 0; white-space: pre-wrap; word-break: break-word;
+  }
+  .card-excerpt mark.exact { background: #fecaca; color: #991b1b; font-weight: 600;
+    padding: 1px 2px; border-radius: 2px; }
+  .card-excerpt.collapsed { max-height: 6em; overflow: hidden; position: relative; }
+  .card-excerpt.collapsed::after {
+    content: ""; position: absolute; bottom: 0; left: 0; right: 0; height: 2em;
+    background: linear-gradient(transparent, var(--panel));
+  }
+  .copy-excerpt-btn { flex-shrink: 0; margin-top: 2px; }
+  .toggle-fold {
+    background: none; border: none; color: var(--accent); font-size: 12px;
+    cursor: pointer; padding: 4px 0; margin-top: 4px;
+  }
+
+  .status {
+    padding: 40px 20px; text-align: center; color: var(--muted);
+    background: var(--panel); border: 1px dashed var(--border); border-radius: 8px;
+  }
+  .status.error { color: var(--danger); border-color: #fca5a5; background: #fef2f2; }
+  .spinner {
+    display: inline-block; width: 16px; height: 16px;
+    border: 2px solid #d4d4d0; border-top-color: var(--accent);
+    border-radius: 50%; animation: spin 0.8s linear infinite;
+    vertical-align: middle; margin-right: 8px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: #1a1a1a; color: white; padding: 10px 16px; border-radius: 6px;
+    font-size: 13px; opacity: 0; transition: opacity 0.2s; pointer-events: none;
+    z-index: 100;
+  }
+  .toast.show { opacity: 1; }
+
+  /* Modal (privacy) */
+  .modal-backdrop {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 200;
+    display: none; align-items: center; justify-content: center; padding: 20px;
+  }
+  .modal-backdrop.show { display: flex; }
+  .modal {
+    background: white; border-radius: 8px; max-width: 540px; width: 100%;
+    max-height: 90vh; display: flex; flex-direction: column;
+  }
+  .modal-head { padding: 14px 20px; border-bottom: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: center; }
+  .modal-head h2 { margin: 0; font-size: 16px; }
+  .modal-body { padding: 16px 20px; overflow-y: auto; flex: 1; font-size: 13.5px; line-height: 1.7; }
+  .modal-body ul { padding-left: 20px; }
+  .modal-foot { padding: 12px 20px; border-top: 1px solid var(--border);
+    display: flex; justify-content: flex-end; gap: 8px; }
+
+  footer.app-footer {
+    text-align: center; padding: 20px; color: var(--muted); font-size: 12px;
+    border-top: 1px solid var(--border); margin-top: 24px; background: var(--panel);
+  }
+  footer.app-footer a { color: var(--accent); text-decoration: none; }
+  footer.app-footer a:hover { text-decoration: underline; }
+  footer.app-footer code { background: #ececea; padding: 1px 5px; border-radius: 3px; font-size: 11px; }
+
+  /* Mobile responsive (≥375px) */
+  @media (max-width: 640px) {
+    header.app-header { padding: 12px 14px; }
+    header.app-header h1 { font-size: 16px; }
+    main { padding: 14px; }
+    .search-panel { padding: 14px; }
+    .search-row { flex-direction: column; gap: 8px; }
+    .mode-toggle { width: 100%; }
+    .mode-btn { flex: 1; padding: 8px 0; }
+    .search-row input { width: 100%; }
+    .search-row button.search { width: 100%; padding: 10px; }
+    .auth-area .user-email { max-width: 140px; }
+    .card { padding: 12px 14px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <div>
+    <h1>逐字稿語料庫語意檢索</h1>
+    <div class="subtitle">媒體組內部工具・v1.0 精確搜尋</div>
+  </div>
+  <div class="auth-area">
+    <span class="user-email" id="user-email"></span>
+    <button id="auth-btn" class="primary">使用 Google 登入</button>
+  </div>
+</header>
+
+<main>
+  <section class="search-panel">
+    <div class="search-row">
+      <div class="mode-toggle" role="group" aria-label="搜尋模式">
+        <button class="mode-btn active" id="mode-precise" type="button">精確</button>
+        <button class="mode-btn" id="mode-broad" type="button" aria-disabled="true" title="v2.0 廣義搜尋開發中">廣義</button>
+      </div>
+      <input id="query-input" type="text" placeholder="輸入精確關鍵字，例如：變電所、台電、社宅…" />
+      <button id="search-btn" class="primary search" type="button">檢索</button>
+    </div>
+    <div class="search-hint">
+      <span class="pill">v1.0 精確搜尋</span>
+      命中需查詢字面出現。要找廣泛主題請多搜幾個相近詞（例：分別搜「變電所」、「台電」、「電網」）。
+    </div>
+    <div class="highlight-legend">
+      <span><span class="swatch exact">完全相符</span>結果中將以紅底高亮</span>
+    </div>
+  </section>
+
+  <div class="cost-bar hidden" id="cost-bar">
+    <span>本次查詢：<span class="cost-value" id="cost-this">$0.0000</span></span>
+    <span>今日累計：<span class="cost-value" id="cost-today">$0.0000</span></span>
+    <span style="color: #9ca3af;">USD・基於 Claude Sonnet 4.6 input $3 / output $15 per 1M tokens</span>
+  </div>
+
+  <div id="results-area"></div>
+</main>
+
+<footer class="app-footer">
+  資料夾：<code>節目</code> + <code>受訪</code>　/　模型：<code>claude-sonnet-4-6</code>　/
+  <a href="#" onclick="showPrivacy(); return false;">隱私說明</a>
+</footer>
+
+<div class="modal-backdrop" id="privacy-modal">
+  <div class="modal">
+    <div class="modal-head">
+      <h2>隱私說明</h2>
+      <button onclick="hidePrivacy()">關閉</button>
+    </div>
+    <div class="modal-body">
+      <p>本工具處理資料的流向：</p>
+      <ul>
+        <li><strong>Google 帳號</strong>：僅用於讀取你 Drive 中指定資料夾的逐字稿檔案。本工具不寫入、不刪除、不修改任何 Drive 內容。</li>
+        <li><strong>逐字稿內容</strong>：搜尋時，命中段落會傳送到本團隊自架的 Cloudflare Worker、再轉送到 Anthropic Claude API 做語意分析。</li>
+        <li><strong>Anthropic Claude API</strong>：依 Anthropic 政策，企業 API 用戶的請求預設<strong>不用於模型訓練</strong>。</li>
+        <li><strong>不保存</strong>：本工具不在伺服器端保存任何逐字稿、查詢、結果。瀏覽器本機 localStorage 僅保存「今日累計成本」此小資料。</li>
+        <li><strong>權限控管</strong>：誰能用、誰看得到，完全由 Drive 資料夾分享名單決定。媒體組以外的人即使知道網址也讀不到內容。</li>
+      </ul>
+      <p style="color: var(--muted); font-size: 12px; margin-top: 16px;">
+        如有疑問請洽工具維運者。
+      </p>
+    </div>
+    <div class="modal-foot">
+      <button class="primary" onclick="hidePrivacy()">了解</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- Google Identity Services -->
+<script src="https://accounts.google.com/gsi/client" async defer onload="onGisLoaded()"></script>
+<!-- mammoth.js（讀 .docx）-->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+
+<script>
+// =============================================================
+// 設定常數
+// =============================================================
+const GOOGLE_OAUTH_CLIENT_ID = "238899236530-s6bqtibgjm7407ds4ogp35dp1ph36tr6.apps.googleusercontent.com";
+const WORKER_URL = "https://transcript-search.happiny-cloudflare.workers.dev";
+const DRIVE_FOLDERS = {
+  "受訪": "1T797mtvd52IYEad1up2MjJV-5w3GLoaC",
+  "節目": "1mB-xrRe9jb4AiAg22XABmg9rzP1JYIxq",
+};
+
+// Claude Sonnet 4.6 計價（USD per 1M tokens）— 必須與 Worker 使用的 model 一致
+const PRICE_INPUT_PER_M = 3.0;
+const PRICE_OUTPUT_PER_M = 15.0;
+
+// 行為參數
+const COARSE_SEGMENT_CHAR_LIMIT = 1500;        // 段落超此長度以句號二切
+const SEGMENTS_PER_WORKER_CALL = 60;            // 單次送 Worker 上限（SPEC §8 Q4）
+const EXCERPT_FOLD_THRESHOLD = 200;             // excerpt 超此字數預設折疊（SPEC §8 Q2）
+
+const MIME_WHITELIST = [
+  "text/plain",
+  "application/vnd.google-apps.document",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+];
+
+// =============================================================
+// 狀態
+// =============================================================
+let tokenClient = null;
+let accessToken = null;
+let userEmail = null;
+let isSearching = false;
+let lastResults = [];
+let lastQuery = "";
+let lastBatchCount = 0;
+
+// =============================================================
+// Google Identity Services 初始化
+// =============================================================
+window.onGisLoaded = () => {
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: GOOGLE_OAUTH_CLIENT_ID,
+    scope: "https://www.googleapis.com/auth/drive.readonly",
+    callback: handleTokenResponse,
+  });
+  console.log("GIS loaded ✓");
+};
+
+function handleTokenResponse(resp) {
+  if (resp.error) {
+    console.error("OAuth error:", resp);
+    toast("登入失敗：" + (resp.error_description || resp.error));
+    return;
+  }
+  accessToken = resp.access_token;
+  fetchUserEmail().then(() => updateAuthUI());
+}
+
+async function fetchUserEmail() {
+  try {
+    const res = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!res.ok) throw new Error("userinfo failed");
+    const data = await res.json();
+    userEmail = data.email;
+  } catch (e) {
+    console.warn("Fetch user email failed:", e);
+    userEmail = "(unknown)";
+  }
+}
+
+function login() {
+  if (!tokenClient) {
+    toast("Google 服務尚未載入，請稍候再試");
+    return;
+  }
+  tokenClient.requestAccessToken({ prompt: "" });
+}
+
+function logout() {
+  if (accessToken) {
+    google.accounts.oauth2.revoke(accessToken, () => {});
+  }
+  accessToken = null;
+  userEmail = null;
+  updateAuthUI();
+}
+
+// Silent re-auth（token 過期時）
+function silentReAuth() {
+  return new Promise((resolve, reject) => {
+    if (!tokenClient) return reject(new Error("gis_not_loaded"));
+    const originalCallback = tokenClient.callback;
+    tokenClient.callback = (resp) => {
+      tokenClient.callback = originalCallback;
+      if (resp.error || !resp.access_token) return reject(new Error("silent_reauth_failed"));
+      accessToken = resp.access_token;
+      resolve();
+    };
+    tokenClient.requestAccessToken({ prompt: "" });
+  });
+}
+
+// =============================================================
+// Drive API
+// =============================================================
+// Shared Drive 必需的參數；對 My Drive 也無害
+const DRIVE_SHARED_PARAMS = "supportsAllDrives=true&includeItemsFromAllDrives=true";
+
+async function listFilesInFolder(folderId, category) {
+  const mimeQ = MIME_WHITELIST.map((m) => `mimeType='${m}'`).join(" or ");
+  const q = `'${folderId}' in parents and (${mimeQ}) and trashed=false`;
+  const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name,mimeType,webViewLink)&pageSize=200&${DRIVE_SHARED_PARAMS}`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+  if (!res.ok) {
+    throw makeError(res.status, res.status === 401 ? "token_invalid" : "drive_list_failed");
+  }
+  const data = await res.json();
+  console.log(`[Drive] ${category} folder listed ${(data.files || []).length} files`);
+  return (data.files || []).map((f) => ({ ...f, category }));
+}
+
+async function readFileContent(file) {
+  if (file.mimeType === "application/vnd.google-apps.document") {
+    const url = `https://www.googleapis.com/drive/v3/files/${file.id}/export?mimeType=text/plain&supportsAllDrives=true`;
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (!res.ok) throw makeError(res.status, "drive_export_failed");
+    return await res.text();
+  }
+  if (file.mimeType === "text/plain") {
+    const url = `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media&supportsAllDrives=true`;
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (!res.ok) throw makeError(res.status, "drive_download_failed");
+    const buf = await res.arrayBuffer();
+    return decodeText(buf);
+  }
+  if (file.mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
+    const url = `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media&supportsAllDrives=true`;
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (!res.ok) throw makeError(res.status, "drive_download_failed");
+    const arrayBuffer = await res.arrayBuffer();
+    if (typeof mammoth === "undefined") throw new Error("mammoth_not_loaded");
+    const result = await mammoth.extractRawText({ arrayBuffer });
+    return result.value;
+  }
+  throw new Error(`unsupported_mime: ${file.mimeType}`);
+}
+
+function decodeText(buffer) {
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(buffer);
+  } catch (e) {
+    try {
+      return new TextDecoder("big5").decode(buffer);
+    } catch (e2) {
+      throw new Error("decode_failed");
+    }
+  }
+}
+
+// =============================================================
+// 民國年檔名解析
+// =============================================================
+function parseFilename(name) {
+  // 移除副檔名（任意副檔名都行）
+  const stem = name.replace(/\.[^.]+$/, "");
+
+  // 格式 A：西元年 8 位數 + 可選分隔符 + 場合，例 "20260405【雅琴看世界】" 或 "20260405_記者會"
+  let m = stem.match(/^(\d{8})[_\s]?(.+)$/);
+  if (m) {
+    const y = parseInt(m[1].slice(0, 4), 10);
+    const mo = parseInt(m[1].slice(4, 6), 10);
+    const d = parseInt(m[1].slice(6, 8), 10);
+    if (y >= 2000 && y <= 2099 && mo >= 1 && mo <= 12 && d >= 1 && d <= 31) {
+      const date = `${y}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+      const occasion = m[2].replace(/^[【\[]/, "").replace(/[】\]]$/, "").trim();
+      return { date, occasion, raw: name };
+    }
+  }
+
+  // 格式 B：民國年 7 位數 + 底線 + 場合，例 "1140520_記者會"
+  m = stem.match(/^(\d{7})_(.+)$/);
+  if (m) {
+    const rocY = parseInt(m[1].slice(0, 3), 10);
+    const mo = parseInt(m[1].slice(3, 5), 10);
+    const d = parseInt(m[1].slice(5, 7), 10);
+    if (rocY >= 100 && rocY <= 200 && mo >= 1 && mo <= 12 && d >= 1 && d <= 31) {
+      const date = `${rocY + 1911}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+      return { date, occasion: m[2], raw: name };
+    }
+  }
+
+  return { date: null, occasion: null, raw: name };
+}
+
+// =============================================================
+// 段落切分（雙換行 + 1500 字句號二切）
+// =============================================================
+function splitSegments(text) {
+  const paras = text.split(/\n\s*\n/).map((p) => p.trim()).filter((p) => p);
+  const out = [];
+  for (const p of paras) {
+    if (p.length <= COARSE_SEGMENT_CHAR_LIMIT) {
+      out.push(p);
+      continue;
+    }
+    // 以句號 / 問號 / 驚嘆號二切
+    const sentences = p.split(/(?<=[。！？!?])/);
+    let buf = "";
+    for (const s of sentences) {
+      if ((buf + s).length > COARSE_SEGMENT_CHAR_LIMIT && buf) {
+        out.push(buf);
+        buf = s;
+      } else {
+        buf += s;
+      }
+    }
+    if (buf.trim()) out.push(buf);
+  }
+  return out;
+}
+
+// =============================================================
+// 粗篩（v1.0：精確字面比對）
+// =============================================================
+function coarseFilter(text, query) {
+  return text.includes(query);
+}
+
+// =============================================================
+// Worker 呼叫（含 silent re-auth retry）
+// =============================================================
+async function callWorker(transcripts, query, isRetry = false) {
+  const res = await fetch(WORKER_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({ transcripts, query }),
+  });
+
+  if (res.status === 401 && !isRetry) {
+    try {
+      await silentReAuth();
+      return callWorker(transcripts, query, true);
+    } catch (e) {
+      throw makeError(401, "token_invalid");
+    }
+  }
+
+  if (res.status === 403) throw makeError(403, "drive_access_denied");
+  if (res.status === 429) throw makeError(429, "rate_limited");
+  if (!res.ok) {
+    let body = {};
+    try { body = await res.json(); } catch {}
+    throw makeError(res.status, body.error || "worker_error");
+  }
+
+  return await res.json();
+}
+
+// =============================================================
+// 成本計算與累計
+// =============================================================
+function calcCost(usage) {
+  return (usage.input_tokens / 1_000_000) * PRICE_INPUT_PER_M
+       + (usage.output_tokens / 1_000_000) * PRICE_OUTPUT_PER_M;
+}
+
+function todayStr() { return new Date().toISOString().slice(0, 10); }
+
+function getCumulativeCost() {
+  try {
+    const raw = localStorage.getItem("transcript-search-cost");
+    if (!raw) return 0;
+    const data = JSON.parse(raw);
+    return data.date === todayStr() ? (data.total || 0) : 0;
+  } catch { return 0; }
+}
+
+function addCumulativeCost(c) {
+  const total = getCumulativeCost() + c;
+  localStorage.setItem("transcript-search-cost", JSON.stringify({ date: todayStr(), total }));
+  return total;
+}
+
+function formatUsd(n) { return `$${n.toFixed(4)}`; }
+
+// =============================================================
+// 主流程
+// =============================================================
+async function runSearch() {
+  const query = document.getElementById("query-input").value.trim();
+  if (!query) { toast("請先輸入主題"); return; }
+  if (!accessToken) { toast("請先登入 Google"); return; }
+  if (isSearching) return;
+
+  isSearching = true;
+  setSearchButtonState(true);
+  renderLoading("正在列出 Drive 檔案…");
+
+  try {
+    // 1. 列檔
+    const folderResults = await Promise.allSettled(
+      Object.entries(DRIVE_FOLDERS).map(([cat, id]) => listFilesInFolder(id, cat))
+    );
+    const allFiles = [];
+    for (const r of folderResults) {
+      if (r.status === "fulfilled") allFiles.push(...r.value);
+      else console.warn("List failed:", r.reason);
+    }
+
+    // 若兩個資料夾都失敗，可能是 token 無效或權限不足
+    const allFailed = folderResults.every((r) => r.status === "rejected");
+    if (allFailed) {
+      const firstErr = folderResults[0].reason;
+      if (firstErr.code === "token_invalid") {
+        // 嘗試 silent re-auth 再試一次
+        try {
+          await silentReAuth();
+          renderLoading("重新驗證後再試…");
+          isSearching = false;
+          setSearchButtonState(false);
+          return runSearch();
+        } catch {
+          throw makeError(401, "token_invalid");
+        }
+      }
+      throw makeError(403, "drive_access_denied");
+    }
+
+    if (allFiles.length === 0) {
+      renderEmptyFolder();
+      return;
+    }
+
+    renderLoading(`讀取 ${allFiles.length} 個檔案中…`);
+
+    // 2. 讀檔內容
+    const fileContents = [];
+    const failedFiles = [];
+    await Promise.all(allFiles.map(async (file) => {
+      try {
+        const text = await readFileContent(file);
+        const meta = parseFilename(file.name);
+        fileContents.push({
+          filename: file.name,
+          category: file.category,
+          link: file.webViewLink,
+          date: meta.date,
+          occasion: meta.occasion,
+          raw_filename: meta.raw,
+          text,
+        });
+      } catch (e) {
+        failedFiles.push({ name: file.name, error: e.message });
+      }
+    }));
+
+    renderLoading(`粗篩 ${fileContents.length} 個檔案…`);
+
+    // 3. 段落切分 + 粗篩
+    const candidates = [];
+    const linkMap = {};
+    for (const fc of fileContents) {
+      const segs = splitSegments(fc.text);
+      for (const seg of segs) {
+        if (coarseFilter(seg, query)) {
+          const segObj = {
+            source_filename: fc.filename,
+            date: fc.date || "未知日期",
+            occasion: fc.occasion || fc.raw_filename,
+            category: fc.category,
+            text: seg,
+          };
+          candidates.push(segObj);
+          linkMap[fc.filename] = fc.link;
+        }
+      }
+    }
+
+    if (candidates.length === 0) {
+      renderNoResults(query, fileContents.length, failedFiles);
+      return;
+    }
+
+    // 4. 分批送 Worker
+    const batches = [];
+    for (let i = 0; i < candidates.length; i += SEGMENTS_PER_WORKER_CALL) {
+      batches.push(candidates.slice(i, i + SEGMENTS_PER_WORKER_CALL));
+    }
+    lastBatchCount = batches.length;
+
+    const allResults = [];
+    let totalUsage = { input_tokens: 0, output_tokens: 0 };
+    for (let i = 0; i < batches.length; i++) {
+      renderLoading(`分析中（第 ${i + 1} / ${batches.length} 批，共 ${candidates.length} 段）…`);
+      const { results, usage } = await callWorker(batches[i], query);
+      allResults.push(...results);
+      totalUsage.input_tokens += usage.input_tokens;
+      totalUsage.output_tokens += usage.output_tokens;
+    }
+
+    // 5. 補回 Drive link
+    for (const r of allResults) r.link = linkMap[r.source_filename] || "#";
+
+    // 6. 計算成本
+    const thisCost = calcCost(totalUsage);
+    const todayTotal = addCumulativeCost(thisCost);
+
+    // 7. 渲染
+    lastResults = allResults;
+    lastQuery = query;
+    renderResults(query, allResults, thisCost, todayTotal, failedFiles);
+  } catch (e) {
+    console.error("Search error:", e);
+    renderError(translateError(e));
+  } finally {
+    isSearching = false;
+    setSearchButtonState(false);
+  }
+}
+
+// =============================================================
+// 錯誤翻譯（SPEC §10）
+// =============================================================
+function makeError(status, code) {
+  const e = new Error(code);
+  e.status = status;
+  e.code = code;
+  return e;
+}
+
+function translateError(e) {
+  const code = e.code || e.message || "unknown";
+  switch (code) {
+    case "missing_token":
+    case "token_invalid":
+      return "登入已過期，請重新登入 Google。";
+    case "drive_access_denied":
+      return "你的帳號未在資料夾分享名單，請洽媒體組管理員。";
+    case "rate_limited":
+      return "請求太快，請稍等幾秒再試。";
+    case "drive_list_failed":
+    case "drive_export_failed":
+    case "drive_download_failed":
+      return "Google Drive 暫時無回應，請稍後重試。";
+    case "json_parse_failed":
+    case "no_text_in_response":
+    case "result_not_array":
+      return "分析結果解析失敗（暫時現象），請重試。";
+    case "claude_api_error":
+      return "AI 分析服務暫時失常，請稍後重試。";
+    case "mammoth_not_loaded":
+      return ".docx 解析模組未載入，請重新整理頁面。";
+    case "decode_failed":
+      return "檔案編碼無法判讀。";
+    default:
+      if (e.status >= 500) return "分析服務暫時無回應，請稍後重試。";
+      if (e.status === 0 || !navigator.onLine) return "無法連線到伺服器，請檢查網路。";
+      return `發生錯誤（${code}），請稍後重試。`;
+  }
+}
+
+// =============================================================
+// 渲染
+// =============================================================
+function renderLoading(msg) {
+  document.getElementById("results-area").innerHTML =
+    `<div class="status"><span class="spinner"></span>${escapeHtml(msg)}</div>`;
+  document.getElementById("cost-bar").classList.add("hidden");
+}
+
+function renderError(msg) {
+  document.getElementById("results-area").innerHTML =
+    `<div class="status error">${escapeHtml(msg)}</div>`;
+  document.getElementById("cost-bar").classList.add("hidden");
+}
+
+function renderEmptyFolder() {
+  document.getElementById("results-area").innerHTML =
+    `<div class="status">兩個資料夾都是空的，或你的帳號讀不到。請洽媒體組管理員確認。</div>`;
+  document.getElementById("cost-bar").classList.add("hidden");
+}
+
+function renderNoResults(query, fileCount, failedFiles) {
+  const failed = failedFiles.length ? `<br><small>（${failedFiles.length} 個檔案無法讀取，已跳過）</small>` : "";
+  document.getElementById("results-area").innerHTML =
+    `<div class="status">沒有在 ${fileCount} 個檔案中找到提到「${escapeHtml(query)}」的段落。<br>
+    <small>v1.0 是精確搜尋——試試別的關鍵字，或拆成多個相近詞分別查。</small>${failed}</div>`;
+  document.getElementById("cost-bar").classList.add("hidden");
+}
+
+function renderResults(query, results, thisCost, todayTotal, failedFiles) {
+  // Cost bar
+  document.getElementById("cost-this").textContent = formatUsd(thisCost);
+  document.getElementById("cost-today").textContent = formatUsd(todayTotal);
+  document.getElementById("cost-bar").classList.remove("hidden");
+
+  if (results.length === 0) {
+    document.getElementById("results-area").innerHTML =
+      `<div class="status">候選段落經 AI 判斷後皆與「${escapeHtml(query)}」語意無關。<br>
+      <small>試試其他關鍵字。</small></div>`;
+    return;
+  }
+
+  const failedNote = failedFiles.length
+    ? `<div style="font-size:12px;color:#9ca3af;margin-bottom:8px;">⚠️ ${failedFiles.length} 個檔案無法讀取，已跳過：${failedFiles.slice(0, 3).map((f) => escapeHtml(f.name)).join("、")}${failedFiles.length > 3 ? "…" : ""}</div>`
+    : "";
+
+  const toolbar = `
+    <div class="results-toolbar">
+      <div class="results-count">找到 <strong>${results.length}</strong> 筆與「${escapeHtml(query)}」相關的段落
+        ${lastBatchCount > 1 ? `<small style="color:#9ca3af;">（${lastBatchCount} 批分析）</small>` : ""}
+      </div>
+      <div><button class="small" onclick="exportCsv()">下載 .csv</button></div>
+    </div>
+  `;
+  const cards = results.map((r, i) => renderCard(r, i, query)).join("");
+  document.getElementById("results-area").innerHTML = failedNote + toolbar + cards;
+}
+
+function renderCard(hit, idx, query) {
+  const catClass = hit.category === "節目" ? "cat-program" : "cat-interview";
+  const collapsed = (hit.excerpt || "").length > EXCERPT_FOLD_THRESHOLD;
+  return `
+    <article class="card">
+      <div class="card-head">
+        <div class="card-meta">
+          <span class="date">${escapeHtml(hit.date || "")}</span>
+          <span class="pill ${catClass}">${escapeHtml(hit.category || "")}</span>
+          <span class="occasion">${escapeHtml(hit.occasion || "")}</span>
+          <span class="filename">${escapeHtml(hit.source_filename || "")}</span>
+        </div>
+        ${hit.link && hit.link !== "#" ? `<a class="drive-link" href="${escapeAttr(hit.link)}" target="_blank" rel="noopener">在 Drive 開啟 ↗</a>` : ""}
+      </div>
+      <div class="card-summary">${escapeHtml(hit.summary || "")}</div>
+      <div class="excerpt-row">
+        <div class="card-excerpt ${collapsed ? "collapsed" : ""}" id="excerpt-${idx}">${highlight(hit.excerpt || "", query)}</div>
+        <button class="small copy-excerpt-btn" onclick="copyExcerpt(${idx})">複製此句原文</button>
+      </div>
+      ${collapsed ? `<button class="toggle-fold" onclick="toggleFold(${idx})" id="fold-${idx}">展開全文</button>` : ""}
+    </article>
+  `;
+}
+
+function highlight(text, query) {
+  if (!query) return escapeHtml(text);
+  const safe = escapeHtml(text);
+  const pattern = new RegExp(escapeRegex(query), "g");
+  return safe.replace(pattern, (m) => `<mark class="exact">${m}</mark>`);
+}
+
+window.toggleFold = (idx) => {
+  const ex = document.getElementById(`excerpt-${idx}`);
+  const btn = document.getElementById(`fold-${idx}`);
+  if (ex.classList.contains("collapsed")) {
+    ex.classList.remove("collapsed");
+    btn.textContent = "收合";
+  } else {
+    ex.classList.add("collapsed");
+    btn.textContent = "展開全文";
+  }
+};
+
+window.copyExcerpt = (idx) => {
+  navigator.clipboard.writeText(lastResults[idx].excerpt || "");
+  toast("已複製此句原文");
+};
+
+window.exportCsv = () => {
+  const rows = [["date", "category", "occasion", "filename", "drive_link", "summary", "excerpt"]];
+  for (const r of lastResults) {
+    rows.push([r.date || "", r.category || "", r.occasion || "", r.source_filename || "",
+               r.link || "", r.summary || "", r.excerpt || ""]);
+  }
+  const csv = rows.map((row) => row.map(csvEscape).join(",")).join("\n");
+  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `${lastQuery}_檢索結果.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(a.href);
+};
+
+function csvEscape(s) { return `"${String(s).replace(/"/g, '""')}"`; }
+
+// =============================================================
+// UI helpers
+// =============================================================
+function setSearchButtonState(searching) {
+  const btn = document.getElementById("search-btn");
+  btn.disabled = searching;
+  btn.textContent = searching ? "搜尋中…" : "檢索";
+}
+
+function updateAuthUI() {
+  const btn = document.getElementById("auth-btn");
+  const emailEl = document.getElementById("user-email");
+  if (accessToken && userEmail) {
+    btn.textContent = "登出";
+    btn.classList.remove("primary");
+    btn.onclick = logout;
+    emailEl.textContent = userEmail;
+  } else {
+    btn.textContent = "使用 Google 登入";
+    btn.classList.add("primary");
+    btn.onclick = login;
+    emailEl.textContent = "";
+  }
+}
+
+function toast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => t.classList.remove("show"), 2000);
+}
+
+window.showPrivacy = () => document.getElementById("privacy-modal").classList.add("show");
+window.hidePrivacy = () => document.getElementById("privacy-modal").classList.remove("show");
+
+function escapeHtml(s) {
+  return String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  }[c]));
+}
+function escapeAttr(s) { return escapeHtml(s); }
+function escapeRegex(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+
+// =============================================================
+// 初始化
+// =============================================================
+document.getElementById("auth-btn").onclick = login;
+document.getElementById("search-btn").onclick = runSearch;
+document.getElementById("query-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !isSearching) runSearch();
+});
+document.getElementById("mode-broad").addEventListener("click", () => {
+  toast("廣義搜尋模式（v2.0）尚在開發中");
+});
+
+updateAuthUI();
+document.getElementById("results-area").innerHTML =
+  `<div class="status">登入後輸入精確關鍵字按「檢索」開始。<br><small>例：變電所、台電、社宅、長照…</small></div>`;
+</script>
+</body>
+</html>

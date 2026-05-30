@@ -1,0 +1,1082 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SPEC 互動審查工具</title>
+<style>
+  :root {
+    --bg: #f7f7f5;
+    --panel: #ffffff;
+    --border: #e5e5e0;
+    --text: #1a1a1a;
+    --muted: #6b6b6b;
+    --accent: #2563eb;
+    --accent-hover: #1d4ed8;
+    --ok: #16a34a;
+    --warn: #f59e0b;
+    --danger: #dc2626;
+    --chip-default: #f3f4f6;
+    --chip-changed: #fef3c7;
+    --chip-ok: #dcfce7;
+    --chip-comment: #ddd6fe;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Noto Sans TC", sans-serif;
+    font-size: 14px; line-height: 1.55; }
+  button {
+    font: inherit; cursor: pointer; border-radius: 5px;
+    border: 1px solid var(--border); background: white; padding: 5px 10px;
+    transition: background 0.1s;
+  }
+  button:hover { background: #f0f0ec; }
+  button.primary { background: var(--accent); color: white; border-color: var(--accent); }
+  button.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+  button.danger { color: var(--danger); border-color: #fca5a5; }
+  button.tiny { padding: 2px 6px; font-size: 11px; }
+  textarea, input {
+    font: inherit; padding: 8px; border: 1px solid var(--border); border-radius: 5px;
+    background: white; width: 100%; font-family: inherit;
+  }
+  textarea { resize: vertical; min-height: 60px; }
+
+  /* === Layout === */
+  .app {
+    display: grid; grid-template-columns: 240px 1fr;
+    min-height: 100vh;
+  }
+  aside.toc {
+    position: sticky; top: 0; height: 100vh; overflow-y: auto;
+    background: var(--panel); border-right: 1px solid var(--border);
+    padding: 16px 12px;
+  }
+  aside.toc h2 { font-size: 13px; margin: 0 0 8px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  aside.toc ul { list-style: none; padding: 0; margin: 0; }
+  aside.toc li a {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 6px 8px; border-radius: 4px; text-decoration: none; color: var(--text);
+    font-size: 13px; margin-bottom: 1px;
+  }
+  aside.toc li a:hover { background: #f0f0ec; }
+  .status-dot {
+    width: 8px; height: 8px; border-radius: 50%; background: #d4d4d0;
+    flex-shrink: 0;
+  }
+  .status-dot.ok { background: var(--ok); }
+  .status-dot.changed { background: var(--warn); }
+  .status-dot.commented { background: #7c3aed; }
+
+  main.content { padding: 20px 28px 100px; max-width: 900px; }
+  header.app-header {
+    background: white; border-bottom: 1px solid var(--border);
+    margin: -20px -28px 20px; padding: 16px 28px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  header.app-header h1 { margin: 0; font-size: 18px; font-weight: 600; }
+  header.app-header .meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  header.app-header .summary { display: flex; gap: 16px; align-items: center; font-size: 12px; }
+  header.app-header .summary span { display: inline-flex; align-items: center; gap: 4px; }
+
+  /* === Sections === */
+  section.spec-section {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+    padding: 18px 20px; margin-bottom: 16px;
+  }
+  section.spec-section h2 {
+    margin: 0 0 10px; font-size: 16px; display: flex; align-items: center; gap: 10px;
+  }
+  section.spec-section h2 .chip {
+    font-size: 11px; padding: 2px 8px; border-radius: 10px; background: var(--chip-default);
+    color: var(--muted); font-weight: 500;
+  }
+  section.spec-section h2 .chip.ok { background: var(--chip-ok); color: #166534; }
+  section.spec-section h2 .chip.changed { background: var(--chip-changed); color: #78350f; }
+  section.spec-section h2 .chip.commented { background: var(--chip-comment); color: #5b21b6; }
+  .section-body { margin-bottom: 12px; color: #333; font-size: 13.5px; }
+  .section-body p { margin: 4px 0 8px; }
+  .section-body code {
+    background: #ececea; padding: 1px 5px; border-radius: 3px;
+    font-family: ui-monospace, SFMono-Regular, monospace; font-size: 12px;
+  }
+  .section-body pre {
+    background: #fafaf7; border: 1px solid var(--border); border-radius: 5px;
+    padding: 10px 12px; overflow-x: auto; font-size: 12px;
+    white-space: pre-wrap;
+  }
+  .section-body ul { margin: 4px 0 8px 18px; padding: 0; }
+  .section-body table {
+    width: 100%; border-collapse: collapse; font-size: 12.5px; margin: 6px 0;
+  }
+  .section-body th, .section-body td {
+    text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  .section-body th { background: #fafaf7; font-weight: 600; }
+
+  /* === Action row (approve/comment) === */
+  .action-row {
+    display: flex; align-items: center; gap: 8px; padding-top: 10px;
+    border-top: 1px dashed var(--border);
+  }
+  .action-row .grow { flex: 1; }
+  .comment-area {
+    margin-top: 8px; padding: 10px; background: #fafaf7;
+    border: 1px solid var(--border); border-radius: 5px;
+  }
+  .comment-area textarea { background: white; }
+
+  /* === Decision cards (Q1-Q10) === */
+  .decision-grid {
+    display: grid; grid-template-columns: 1fr; gap: 10px;
+  }
+  .decision-card {
+    border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px;
+    background: #fafaf7;
+  }
+  .decision-card.changed { border-color: var(--warn); background: #fffbeb; }
+  .decision-card .qhead { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 4px; }
+  .decision-card .qtitle { font-weight: 600; font-size: 13.5px; }
+  .decision-card .qcurrent {
+    font-size: 12.5px; color: #166534; background: var(--chip-ok);
+    padding: 2px 8px; border-radius: 10px; display: inline-block;
+    margin-top: 4px;
+  }
+  .decision-card .qcurrent.changed { background: var(--chip-changed); color: #78350f; }
+  .decision-card .qexpand { font-size: 11px; }
+  .decision-options {
+    margin-top: 10px; display: flex; flex-direction: column; gap: 6px;
+    border-top: 1px dashed var(--border); padding-top: 10px;
+  }
+  .decision-option {
+    display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px;
+    border: 1px solid var(--border); border-radius: 5px; background: white;
+    cursor: pointer; transition: border-color 0.1s, background 0.1s;
+  }
+  .decision-option:hover { border-color: var(--accent); }
+  .decision-option.selected { border-color: var(--accent); background: #eff6ff; }
+  .decision-option input[type=radio] { margin-top: 3px; }
+  .decision-option .opt-label { font-weight: 500; font-size: 13px; }
+  .decision-option .opt-desc { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .decision-option .custom-input { margin-top: 6px; }
+
+  /* === Kanban (Boundaries) === */
+  .kanban {
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;
+  }
+  .kanban-col {
+    background: #fafaf7; border: 1px solid var(--border); border-radius: 6px;
+    padding: 10px; min-height: 150px;
+  }
+  .kanban-col h3 {
+    margin: 0 0 8px; font-size: 13px; padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+  }
+  .kanban-col.always h3 { color: var(--ok); }
+  .kanban-col.askfirst h3 { color: var(--warn); }
+  .kanban-col.never h3 { color: var(--danger); }
+  .kanban-col.dragover { background: #eff6ff; border-color: var(--accent); }
+  .kanban-item {
+    background: white; border: 1px solid var(--border); border-radius: 5px;
+    padding: 6px 8px; margin-bottom: 6px; cursor: grab; font-size: 12.5px;
+    display: flex; align-items: flex-start; gap: 6px;
+  }
+  .kanban-item.dragging { opacity: 0.4; }
+  .kanban-item .item-text { flex: 1; }
+  .kanban-item .item-del { color: var(--danger); cursor: pointer; font-size: 14px; line-height: 1; }
+  .kanban-add {
+    margin-top: 4px; display: flex; gap: 4px;
+  }
+  .kanban-add input { font-size: 12px; padding: 4px 6px; }
+  .kanban-add button { font-size: 11px; padding: 4px 8px; }
+
+  /* === Triage (Open Questions) === */
+  .triage-list { display: flex; flex-direction: column; gap: 6px; }
+  .triage-item {
+    display: flex; align-items: center; gap: 10px; padding: 8px 10px;
+    border: 1px solid var(--border); border-radius: 5px; background: #fafaf7;
+  }
+  .triage-item.promoted { background: #dcfce7; border-color: var(--ok); }
+  .triage-item.dropped { background: #fee2e2; border-color: var(--danger); opacity: 0.6; text-decoration: line-through; }
+  .triage-item .triage-text { flex: 1; font-size: 12.5px; }
+  .triage-buttons { display: flex; gap: 4px; }
+  .triage-buttons button { font-size: 11px; padding: 3px 8px; }
+  .triage-buttons button.active { background: var(--accent); color: white; border-color: var(--accent); }
+  .triage-buttons button.active.promote { background: var(--ok); border-color: var(--ok); }
+  .triage-buttons button.active.drop { background: var(--danger); border-color: var(--danger); }
+
+  /* === Checklist (Success Criteria) === */
+  .checklist { display: flex; flex-direction: column; gap: 2px; }
+  .check-item {
+    display: flex; align-items: flex-start; gap: 10px;
+    font-size: 13px; line-height: 1.6; padding: 6px 4px;
+    border-bottom: 1px dotted #ececea;
+  }
+  .check-item:last-child { border-bottom: none; }
+  .check-item.removed { opacity: 0.5; text-decoration: line-through; }
+  .check-item input[type=checkbox] {
+    margin: 4px 0 0 0; flex-shrink: 0; cursor: pointer;
+  }
+  .check-item .item-text {
+    flex: 1; min-width: 0; word-break: break-word;
+  }
+  .check-item .item-del {
+    cursor: pointer; color: var(--danger); font-size: 14px;
+    flex-shrink: 0; padding: 0 4px;
+  }
+
+  /* === Prompt editor === */
+  .prompt-editor {
+    border: 1px solid var(--border); border-radius: 5px;
+  }
+  .prompt-editor textarea {
+    font-family: ui-monospace, SFMono-Regular, monospace; font-size: 12px;
+    min-height: 240px; border: none; border-radius: 5px;
+  }
+  .prompt-editor .changed-indicator {
+    background: var(--chip-changed); color: #78350f; padding: 4px 10px; font-size: 11px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* === Floating generate button === */
+  .floating-bar {
+    position: fixed; bottom: 16px; right: 16px;
+    background: var(--accent); color: white; padding: 12px 18px;
+    border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+    cursor: pointer; font-weight: 600; font-size: 14px;
+    display: flex; align-items: center; gap: 8px;
+    border: none;
+    z-index: 50;
+  }
+  .floating-bar:hover { background: var(--accent-hover); }
+  .floating-bar .count { font-size: 11px; opacity: 0.9; }
+
+  /* === Modal === */
+  .modal-backdrop {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100;
+    display: none; align-items: center; justify-content: center; padding: 20px;
+  }
+  .modal-backdrop.show { display: flex; }
+  .modal {
+    background: white; border-radius: 8px; max-width: 800px; width: 100%;
+    max-height: 90vh; display: flex; flex-direction: column;
+  }
+  .modal-head {
+    padding: 14px 20px; border-bottom: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .modal-head h2 { margin: 0; font-size: 16px; }
+  .modal-body { padding: 16px 20px; overflow-y: auto; flex: 1; }
+  .modal-body pre {
+    background: #fafaf7; border: 1px solid var(--border); border-radius: 5px;
+    padding: 12px; font-size: 12px; white-space: pre-wrap;
+    max-height: 60vh; overflow-y: auto;
+  }
+  .modal-foot {
+    padding: 12px 20px; border-top: 1px solid var(--border);
+    display: flex; justify-content: flex-end; gap: 8px;
+  }
+  .toast {
+    position: fixed; bottom: 70px; right: 16px; background: #1a1a1a; color: white;
+    padding: 8px 14px; border-radius: 5px; font-size: 12px; opacity: 0;
+    transition: opacity 0.2s; pointer-events: none; z-index: 200;
+  }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <aside class="toc">
+    <h2>章節導覽</h2>
+    <ul id="toc-list"></ul>
+    <h2 style="margin-top: 18px;">圖例</h2>
+    <div style="font-size: 12px; color: var(--muted);">
+      <div><span class="status-dot"></span> 未審</div>
+      <div><span class="status-dot ok"></span> OK</div>
+      <div><span class="status-dot changed"></span> 有變更</div>
+      <div><span class="status-dot commented"></span> 有評論</div>
+    </div>
+  </aside>
+
+  <main class="content">
+    <header class="app-header">
+      <div>
+        <h1>SPEC 互動審查</h1>
+        <div class="meta">逐字稿語料庫語意檢索　/　v1 (2026-05-26)</div>
+      </div>
+      <div class="summary">
+        <span><span class="status-dot ok"></span><span id="cnt-ok">0</span> OK</span>
+        <span><span class="status-dot changed"></span><span id="cnt-changed">0</span> 變更</span>
+        <span><span class="status-dot commented"></span><span id="cnt-commented">0</span> 評論</span>
+        <span><span class="status-dot"></span><span id="cnt-pending">0</span> 未審</span>
+      </div>
+    </header>
+
+    <div id="sections"></div>
+  </main>
+</div>
+
+<button class="floating-bar" id="gen-btn">
+  產出回饋提示詞
+  <span class="count" id="action-count">0 項變更</span>
+</button>
+
+<div class="modal-backdrop" id="modal">
+  <div class="modal">
+    <div class="modal-head">
+      <h2>回饋提示詞（複製貼回對話）</h2>
+      <button onclick="closeModal()">關閉</button>
+    </div>
+    <div class="modal-body">
+      <pre id="modal-content"></pre>
+    </div>
+    <div class="modal-foot">
+      <button onclick="closeModal()">取消</button>
+      <button class="primary" onclick="copyOutput()">複製到剪貼簿</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// =============================================================
+// SPEC 資料模型
+// =============================================================
+const SECTIONS = [
+  { id: "1", title: "§1 Objective", review: "approve",
+    body: `<p><strong>是什麼</strong>：媒體組對候選人歷年逐字稿做主題式語意檢索。</p>
+           <p><strong>給誰用</strong>：在 Drive 資料夾分享名單內的媒體組成員。</p>
+           <p><strong>User story</strong>：登入 → 輸入「變電所」→ 看到歷來所有相關發言（日期/分類/場合/Drive 連結/AI 摘要/高亮原文）→ 複製或下載 CSV。</p>
+           <p><strong>不是</strong>：單篇摘要工具、內容管理工具、查詢歷史保存工具。</p>` },
+
+  { id: "2", title: "§2 Tech Stack", review: "approve",
+    body: `<table><tr><th>層</th><th>技術</th><th>備註</th></tr>
+           <tr><td>前端</td><td>單檔 HTML + 原生 JS + CSS</td><td>無 build chain</td></tr>
+           <tr><td>登入</td><td>Google Identity Services</td><td>scope <code>drive.readonly</code></td></tr>
+           <tr><td>.docx 解析</td><td>mammoth.js 1.6.x</td><td>前端 CDN 載入</td></tr>
+           <tr><td>後端</td><td>Cloudflare Workers</td><td>JS、無 build</td></tr>
+           <tr><td>AI</td><td>Anthropic API</td><td><code>claude-sonnet-4-6</code></td></tr>
+           <tr><td>儲存</td><td>Google Drive</td><td>使用者 OAuth token 直讀</td></tr>
+           <tr><td>託管</td><td>GitHub Pages</td><td>—</td></tr></table>` },
+
+  { id: "3", title: "§3 Commands", review: "approve",
+    body: `<pre># 前端 dev
+python3 -m http.server 8000
+
+# Worker dev
+cd worker/ && wrangler dev
+
+# Worker 部署
+cd worker/ && wrangler deploy
+wrangler secret put ANTHROPIC_API_KEY
+
+# 前端部署
+git push   # GitHub Pages 自動</pre>` },
+
+  { id: "4", title: "§4 Project Structure", review: "approve",
+    body: `<pre>逐字稿檢索/
+├─ index.html
+├─ SPEC.md                 ← 真相來源
+├─ SETUP.md
+├─ chat_to_code_HANDOFF.md ← 凍結
+└─ worker/
+   ├─ worker.js
+   ├─ wrangler.toml
+   └─ package.json</pre>` },
+
+  { id: "5", title: "§5 Code Style", review: "approve",
+    body: `<ul>
+           <li>前端 vanilla JS、無框架</li>
+           <li>縮排 2 空格；雙引號為主</li>
+           <li>變數 camelCase、常數 UPPER_SNAKE_CASE</li>
+           <li>註解中文（台灣用語），解釋 why 不解釋 what</li>
+           <li>使用者面向文案一律繁體中文</li>
+           </ul>` },
+
+  { id: "6", title: "§6 Testing Strategy", review: "approve",
+    body: `<p><strong>本期 MVP 不引入測試框架</strong>。理由：單頁 + 薄 Worker，自動化測試 ROI 低。</p>
+           <p><strong>替代</strong>：每階段附 Smoke Test 清單（見 §11.4）。</p>
+           <p><strong>未來</strong>：Vitest（前端純函式）、wrangler unstable_dev（Worker）。</p>` },
+
+  { id: "7", title: "§7 Boundaries", review: "kanban",
+    boundaries: {
+      always: [
+        "金鑰只進 Cloudflare secret，永不進 git/前端",
+        "Drive scope 只用 drive.readonly",
+        "部署前在本機跑一次完整 happy path",
+        "使用者面向文案用繁體中文（台灣用語）",
+        "民國年 → 西元年轉換",
+      ],
+      askfirst: [
+        "新增前端 lib 相依",
+        "變更 OAuth scope",
+        "變更 Worker 環境變數結構",
+        "改動 Drive folder ID 常數",
+        "引入 localStorage 以外的持久化機制",
+        "把硬寫死的 SYNONYMS 表搬到外部 config",
+        "切換 Claude model",
+      ],
+      never: [
+        "把 ANTHROPIC_API_KEY 寫進前端或 commit",
+        "要求 Drive 寫入權限",
+        "新增檔案刪除/編輯/分享變更功能",
+        "跳過 Worker 端的 Drive 反查就直接呼叫 Claude",
+        "沿用過期或猜測的 Claude model ID",
+        "建立後端資料庫或快取持久層",
+        "加入使用者白名單邏輯",
+      ],
+    } },
+
+  { id: "8", title: "§8 Decisions Q1-Q10", review: "decisions",
+    decisions: [
+      { q: "Q1", title: "段落切分", current: 0, options: [
+        { label: "雙換行為界，超 1500 字句號二切", desc: "目前選項" },
+        { label: "固定 500 字滑動窗（100 字重疊）", desc: "機械切，邏輯簡單" },
+        { label: "整檔當一段送 Claude", desc: "最準但最貴" },
+      ]},
+      { q: "Q2", title: "excerpt 折疊", current: 0, options: [
+        { label: "超 200 字 UI 折疊、點展開", desc: "目前選項" },
+        { label: "不折疊、全文全顯", desc: "" },
+        { label: "Claude 端就限制 excerpt 最長 300 字", desc: "" },
+      ]},
+      { q: "Q3", title: "Token 過期處理", current: 0, options: [
+        { label: "偵測失敗自動 silent re-auth，失敗才提示", desc: "目前選項" },
+        { label: "過期前 5 分鐘主動 refresh", desc: "預防式" },
+        { label: "直接顯示「請重登」", desc: "最簡單" },
+      ]},
+      { q: "Q4", title: "單次查詢上限", current: 0, options: [
+        { label: "60 段，超過分批送", desc: "目前選項" },
+        { label: "30 段，更省", desc: "" },
+        { label: "120 段，追求完整", desc: "" },
+        { label: "不設上限，前端再粗篩到 ≤ 60", desc: "" },
+      ]},
+      { q: "Q5", title: "子資料夾遞迴", current: 0, options: [
+        { label: "只掃頂層，不遞迴", desc: "目前選項（變更）" },
+        { label: "遞迴 ≤ 3 層", desc: "" },
+        { label: "無限遞迴", desc: "" },
+      ]},
+      { q: "Q6", title: ".txt 編碼", current: 0, options: [
+        { label: "UTF-8 失敗 fallback Big5", desc: "目前選項" },
+        { label: "只支援 UTF-8", desc: "" },
+        { label: "UTF-8 + Big5 + CP950 都試", desc: "" },
+      ]},
+      { q: "Q7", title: "mimeType 過濾", current: 0, options: [
+        { label: "白名單：text/plain + gdoc + docx", desc: "目前選項" },
+        { label: "黑名單：跳過 video/audio/image/*", desc: "" },
+        { label: "看副檔名", desc: "" },
+      ]},
+      { q: "Q8", title: "Worker prompt", current: 0, options: [
+        { label: "中文台灣用語、JSON-only、寧漏勿濫（草稿已定）", desc: "目前選項" },
+        { label: "改寫（在下方評論寫新版重點）", desc: "" },
+      ]},
+      { q: "Q9", title: "Worker 擋人邏輯", current: 0, options: [
+        { label: "Worker 拿 token 反問 Drive（零維護白名單）", desc: "目前選項" },
+        { label: "ALLOWED_EMAILS 白名單", desc: "" },
+        { label: "只驗 token 有效性（風險自負）", desc: "" },
+      ]},
+      { q: "Q10", title: "錯誤 → UX matrix", current: 0, options: [
+        { label: "11 類錯誤 matrix（已定案）", desc: "目前選項" },
+        { label: "需要調整某幾條（在下方評論說明）", desc: "" },
+      ]},
+    ]},
+
+  { id: "9", title: "§9 Worker Spec", review: "approve",
+    body: `<p><strong>Endpoint</strong>：<code>POST /</code></p>
+           <p><strong>Body</strong>：<code>{ transcripts: [...], query: "..." }</code></p>
+           <p><strong>Header</strong>：<code>Authorization: Bearer &lt;google_token&gt;</code></p>
+           <p><strong>處理流程</strong>：</p>
+           <ol style="font-size: 12.5px;">
+             <li>驗 Authorization header 有 token</li>
+             <li>拿 token 呼叫 Drive API，兩個資料夾任一能讀 → 通過</li>
+             <li>組 prompt（§9.4）→ 呼叫 Claude</li>
+             <li>解析 JSON → 回傳；解析失敗回 502</li>
+           </ol>` },
+
+  { id: "9.4", title: "§9.4 Worker Prompt（可編輯）", review: "edit-text",
+    promptDefault: `你是政治幕僚的研究助理，協助從候選人歷年的訪談、節目逐字稿中，檢索特定主題的歷史發言。
+
+【任務】
+我會給你：
+1. 一個查詢主題（query）
+2. 一組逐字稿候選段落（segments，已由前端做關鍵字粗篩，每段含 source_filename、date、occasion、category、text）
+
+請判斷哪些段落「在語意上」真正與查詢主題相關（不只是字面湊巧出現關鍵字），並為相關段落生成一句中文摘要。
+
+【判斷標準】
+- 相關：段落主旨涉及該主題；或在該主題脈絡下提出觀點、數據、質詢、承諾
+- 不相關：只是順帶提到關鍵字；或關鍵字出現在比喻、跳針口頭禪等無關語境
+- 寧可漏（少報幾筆）勿濫（不要為了交差把可疑的也回）
+
+【輸出】
+只回一個 JSON array，無前言、無 markdown 圍欄、無說明文字。每個 element 結構：
+{
+  "source_filename": <原值原樣回傳>,
+  "date": <原值原樣回傳>,
+  "occasion": <原值原樣回傳>,
+  "category": <原值原樣回傳>,
+  "excerpt": <從原 text 中擷取最相關的連續片段，不改寫；若整段都相關回整段；最長 800 字>,
+  "summary": <一句中文摘要，描述該段在主題上的立場/重點/動作；20-50 字>
+}
+
+若沒有任何段落相關，回 []` },
+
+  { id: "10", title: "§10 Error Matrix", review: "approve",
+    body: `<p>11 類錯誤 × UX 訊息對應表（已 OK）。完整內容見 SPEC.md §10。</p>
+           <p>含：未登入、Token 過期、Drive 權限不足、Worker 拒絕、Drive 暫故障、粗篩無命中、Worker 過載、Claude 格式錯、Claude 失敗、網路斷線、個別檔案解碼失敗。</p>` },
+
+  { id: "11", title: "§11 Success Criteria", review: "checklist",
+    criteria: [
+      "媒體組成員用 Google 帳號登入後能搜尋並看到結果卡片",
+      "卡片含：日期、分類 pill、場合、檔名、Drive 連結、AI 摘要、高亮原文",
+      "卡片可一鍵複製「此句原文」",
+      "結果可下載為 .csv（含 7 欄）",
+      "民國年檔名正確解析；解析失敗 fallback 不 crash",
+      "媒體組以外的人即使知道網址也看不到逐字稿",
+      "攻擊者直接 curl Worker URL 收到 403",
+      "GitHub repo 全文搜 ANTHROPIC_API_KEY 為零命中",
+      "OAuth scope 只有 drive.readonly",
+      "搜尋常見主題完整流程 ≤ 30 秒",
+      "11 類錯誤都有對應的中文 UX 訊息",
+      "Token 過期時自動 re-auth，使用者不需手動處理",
+    ]},
+
+  { id: "12", title: "§12 Open Questions（分類）", review: "triage",
+    questions: [
+      "SYNONYMS 表如何維護（本期硬寫死）",
+      "查詢歷史 / 收藏功能",
+      "IP rate limit",
+      "多語系",
+      "行動裝置適配",
+      "大量並發應對",
+      "隱私聲明 UI（逐字稿送 Anthropic API 預設不訓練但未明示告知）",
+    ]},
+];
+
+// =============================================================
+// 狀態管理
+// =============================================================
+const state = {
+  // sections: { [id]: { status: "pending"|"ok"|"changed"|"commented", comment: "...", ... } }
+  sections: {},
+};
+
+function loadState() {
+  try {
+    const saved = JSON.parse(localStorage.getItem("spec-review-state") || "{}");
+    Object.assign(state.sections, saved);
+  } catch (e) {}
+}
+function saveState() {
+  localStorage.setItem("spec-review-state", JSON.stringify(state.sections));
+}
+function getSec(id) {
+  if (!state.sections[id]) state.sections[id] = { status: "pending" };
+  return state.sections[id];
+}
+function setStatus(id, status) {
+  getSec(id).status = status;
+  saveState();
+  refreshTOC();
+  refreshHeader();
+}
+
+// =============================================================
+// 渲染
+// =============================================================
+function renderAll() {
+  const root = document.getElementById("sections");
+  root.innerHTML = "";
+  SECTIONS.forEach(sec => {
+    const el = document.createElement("section");
+    el.className = "spec-section";
+    el.id = `sec-${sec.id}`;
+    el.appendChild(renderSection(sec));
+    root.appendChild(el);
+  });
+  refreshTOC();
+  refreshHeader();
+}
+
+function renderSection(sec) {
+  const wrap = document.createDocumentFragment();
+  const st = getSec(sec.id);
+
+  const h2 = document.createElement("h2");
+  h2.innerHTML = `${escapeHtml(sec.title)} <span class="chip ${st.status}" id="chip-${sec.id}">${statusLabel(st.status)}</span>`;
+  wrap.appendChild(h2);
+
+  const body = document.createElement("div");
+  body.className = "section-body";
+
+  if (sec.review === "approve") {
+    body.innerHTML = sec.body;
+  } else if (sec.review === "kanban") {
+    body.appendChild(renderKanban(sec));
+  } else if (sec.review === "decisions") {
+    body.appendChild(renderDecisions(sec));
+  } else if (sec.review === "edit-text") {
+    body.appendChild(renderPromptEditor(sec));
+  } else if (sec.review === "checklist") {
+    body.appendChild(renderChecklist(sec));
+  } else if (sec.review === "triage") {
+    body.appendChild(renderTriage(sec));
+  }
+  wrap.appendChild(body);
+
+  // Action row
+  const ar = document.createElement("div");
+  ar.className = "action-row";
+  ar.innerHTML = `
+    <button onclick="markOK('${sec.id}')">✅ OK 通過</button>
+    <button onclick="toggleComment('${sec.id}')">💬 加評論</button>
+    <span class="grow"></span>
+    <button class="tiny" onclick="resetSection('${sec.id}')">重置本段</button>
+  `;
+  wrap.appendChild(ar);
+
+  // Comment area (initially hidden unless has comment)
+  const ca = document.createElement("div");
+  ca.className = "comment-area";
+  ca.id = `comment-${sec.id}`;
+  ca.style.display = st.comment ? "block" : "none";
+  ca.innerHTML = `<textarea placeholder="寫下你對這段的意見、修改建議、疑問..."
+    oninput="onComment('${sec.id}', this.value)">${escapeHtml(st.comment || "")}</textarea>`;
+  wrap.appendChild(ca);
+
+  return wrap;
+}
+
+function statusLabel(s) {
+  return { pending: "未審", ok: "OK", changed: "有變更", commented: "有評論" }[s] || s;
+}
+
+// === Kanban ===
+function renderKanban(sec) {
+  const st = getSec(sec.id);
+  if (!st.boundaries) st.boundaries = JSON.parse(JSON.stringify(sec.boundaries));
+  const wrap = document.createElement("div");
+  wrap.className = "kanban";
+  ["always", "askfirst", "never"].forEach(col => {
+    const colEl = document.createElement("div");
+    colEl.className = `kanban-col ${col}`;
+    colEl.dataset.col = col;
+    colEl.dataset.secId = sec.id;
+    colEl.innerHTML = `<h3>${({always:"Always do", askfirst:"Ask first", never:"Never do"})[col]}</h3>`;
+    st.boundaries[col].forEach((txt, idx) => {
+      const it = document.createElement("div");
+      it.className = "kanban-item";
+      it.draggable = true;
+      it.dataset.col = col;
+      it.dataset.idx = idx;
+      it.dataset.secId = sec.id;
+      it.innerHTML = `<span class="item-text">${escapeHtml(txt)}</span><span class="item-del" title="刪除">×</span>`;
+      it.querySelector(".item-del").onclick = () => {
+        st.boundaries[col].splice(idx, 1);
+        markChanged(sec.id);
+        renderAll();
+      };
+      attachDrag(it);
+      colEl.appendChild(it);
+    });
+    // add input
+    const addEl = document.createElement("div");
+    addEl.className = "kanban-add";
+    addEl.innerHTML = `<input type="text" placeholder="+ 新增..."><button>加</button>`;
+    const inp = addEl.querySelector("input");
+    const btn = addEl.querySelector("button");
+    const doAdd = () => {
+      const v = inp.value.trim();
+      if (!v) return;
+      st.boundaries[col].push(v);
+      markChanged(sec.id);
+      renderAll();
+    };
+    btn.onclick = doAdd;
+    inp.onkeydown = (e) => { if (e.key === "Enter") doAdd(); };
+    colEl.appendChild(addEl);
+    attachDrop(colEl);
+    wrap.appendChild(colEl);
+  });
+  return wrap;
+}
+
+let dragData = null;
+function attachDrag(el) {
+  el.addEventListener("dragstart", e => {
+    dragData = { secId: el.dataset.secId, fromCol: el.dataset.col, idx: parseInt(el.dataset.idx) };
+    el.classList.add("dragging");
+    e.dataTransfer.effectAllowed = "move";
+  });
+  el.addEventListener("dragend", () => {
+    el.classList.remove("dragging");
+    document.querySelectorAll(".kanban-col.dragover").forEach(c => c.classList.remove("dragover"));
+  });
+}
+function attachDrop(col) {
+  col.addEventListener("dragover", e => { e.preventDefault(); col.classList.add("dragover"); });
+  col.addEventListener("dragleave", () => col.classList.remove("dragover"));
+  col.addEventListener("drop", e => {
+    e.preventDefault();
+    if (!dragData || dragData.secId !== col.dataset.secId) return;
+    const st = getSec(col.dataset.secId);
+    const item = st.boundaries[dragData.fromCol].splice(dragData.idx, 1)[0];
+    st.boundaries[col.dataset.col].push(item);
+    dragData = null;
+    markChanged(col.dataset.secId);
+    renderAll();
+  });
+}
+
+// === Decision cards ===
+function renderDecisions(sec) {
+  const st = getSec(sec.id);
+  if (!st.decisions) st.decisions = sec.decisions.map(d => ({ current: d.current, expanded: false, custom: "" }));
+  const wrap = document.createElement("div");
+  wrap.className = "decision-grid";
+  sec.decisions.forEach((d, i) => {
+    const s = st.decisions[i];
+    const isChanged = s.current !== d.current;
+    const card = document.createElement("div");
+    card.className = `decision-card ${isChanged ? "changed" : ""}`;
+    const currentLabel = d.options[s.current].label;
+    card.innerHTML = `
+      <div class="qhead">
+        <div>
+          <div class="qtitle">${d.q}：${escapeHtml(d.title)}</div>
+          <div class="qcurrent ${isChanged ? "changed" : ""}">${isChanged ? "已改：" : ""}${escapeHtml(currentLabel)}</div>
+        </div>
+        <button class="tiny qexpand">${s.expanded ? "收起" : "更換選項"}</button>
+      </div>
+    `;
+    card.querySelector(".qexpand").onclick = () => {
+      s.expanded = !s.expanded;
+      saveState();
+      renderAll();
+    };
+    if (s.expanded) {
+      const opts = document.createElement("div");
+      opts.className = "decision-options";
+      d.options.forEach((opt, oi) => {
+        const oel = document.createElement("label");
+        oel.className = `decision-option ${s.current === oi ? "selected" : ""}`;
+        oel.innerHTML = `
+          <input type="radio" name="dec-${sec.id}-${i}" ${s.current === oi ? "checked" : ""}>
+          <div>
+            <div class="opt-label">${escapeHtml(opt.label)}</div>
+            ${opt.desc ? `<div class="opt-desc">${escapeHtml(opt.desc)}</div>` : ""}
+          </div>
+        `;
+        oel.onclick = (e) => {
+          if (e.target.tagName !== "INPUT") return;
+          s.current = oi;
+          if (s.current === d.current) {
+            // 恢復原樣
+          } else {
+            markChanged(sec.id);
+          }
+          renderAll();
+        };
+        opts.appendChild(oel);
+      });
+      card.appendChild(opts);
+    }
+    wrap.appendChild(card);
+  });
+  return wrap;
+}
+
+// === Prompt editor ===
+function renderPromptEditor(sec) {
+  const st = getSec(sec.id);
+  if (st.prompt === undefined) st.prompt = sec.promptDefault;
+  const wrap = document.createElement("div");
+  wrap.className = "prompt-editor";
+  const changed = st.prompt !== sec.promptDefault;
+  if (changed) {
+    const ind = document.createElement("div");
+    ind.className = "changed-indicator";
+    ind.textContent = "⚠️ 已修改（與原版不同）";
+    wrap.appendChild(ind);
+  }
+  const ta = document.createElement("textarea");
+  ta.value = st.prompt;
+  ta.oninput = () => {
+    st.prompt = ta.value;
+    if (st.prompt !== sec.promptDefault) markChanged(sec.id);
+    saveState();
+    // 動態 update changed indicator without full re-render
+    const isChanged = st.prompt !== sec.promptDefault;
+    let ind = wrap.querySelector(".changed-indicator");
+    if (isChanged && !ind) {
+      ind = document.createElement("div");
+      ind.className = "changed-indicator";
+      ind.textContent = "⚠️ 已修改（與原版不同）";
+      wrap.prepend(ind);
+    } else if (!isChanged && ind) {
+      ind.remove();
+    }
+  };
+  wrap.appendChild(ta);
+  return wrap;
+}
+
+// === Checklist ===
+function renderChecklist(sec) {
+  const st = getSec(sec.id);
+  if (!st.criteria) st.criteria = sec.criteria.map(c => ({ text: c, kept: true }));
+  // 防禦性：若舊版 state 存成字串陣列，normalize 成物件
+  st.criteria = st.criteria.map(c => typeof c === "string" ? { text: c, kept: true } : c);
+  if (!st.added) st.added = [];
+  const wrap = document.createElement("div");
+  wrap.className = "checklist";
+  st.criteria.forEach((c, i) => {
+    const el = document.createElement("div");
+    el.className = `check-item ${c.kept ? "" : "removed"}`;
+    el.innerHTML = `
+      <input type="checkbox" ${c.kept ? "checked" : ""}>
+      <span class="item-text">${escapeHtml(c.text)}</span>
+    `;
+    el.querySelector("input").onclick = () => {
+      c.kept = !c.kept;
+      markChanged(sec.id);
+      renderAll();
+    };
+    wrap.appendChild(el);
+  });
+  st.added.forEach((c, i) => {
+    const el = document.createElement("div");
+    el.className = "check-item";
+    el.innerHTML = `
+      <input type="checkbox" checked disabled>
+      <span class="item-text">${escapeHtml(c)} <small style="color:#666;">（新增）</small></span>
+      <span class="item-del" title="刪除">×</span>
+    `;
+    el.querySelector(".item-del").onclick = () => {
+      st.added.splice(i, 1);
+      saveState();
+      renderAll();
+    };
+    wrap.appendChild(el);
+  });
+  const addEl = document.createElement("div");
+  addEl.className = "kanban-add";
+  addEl.style.marginTop = "8px";
+  addEl.innerHTML = `<input type="text" placeholder="+ 新增驗收條件..."><button>加</button>`;
+  const inp = addEl.querySelector("input");
+  const btn = addEl.querySelector("button");
+  const doAdd = () => {
+    const v = inp.value.trim();
+    if (!v) return;
+    st.added.push(v);
+    markChanged(sec.id);
+    renderAll();
+  };
+  btn.onclick = doAdd;
+  inp.onkeydown = (e) => { if (e.key === "Enter") doAdd(); };
+  wrap.appendChild(addEl);
+  return wrap;
+}
+
+// === Triage (Open Questions) ===
+function renderTriage(sec) {
+  const st = getSec(sec.id);
+  if (!st.triage) st.triage = sec.questions.map(q => ({ text: q, status: "defer" })); // defer | promote | drop
+  const wrap = document.createElement("div");
+  wrap.className = "triage-list";
+  st.triage.forEach((q, i) => {
+    const el = document.createElement("div");
+    el.className = `triage-item ${q.status === "promote" ? "promoted" : ""} ${q.status === "drop" ? "dropped" : ""}`;
+    el.innerHTML = `
+      <span class="triage-text">${escapeHtml(q.text)}</span>
+      <div class="triage-buttons">
+        <button class="${q.status === "defer" ? "active" : ""}" data-s="defer">延後</button>
+        <button class="promote ${q.status === "promote" ? "active" : ""}" data-s="promote">拉進 MVP</button>
+        <button class="drop ${q.status === "drop" ? "active" : ""}" data-s="drop">刪除</button>
+      </div>
+    `;
+    el.querySelectorAll("button").forEach(b => {
+      b.onclick = () => {
+        q.status = b.dataset.s;
+        if (q.status !== "defer") markChanged(sec.id);
+        renderAll();
+      };
+    });
+    wrap.appendChild(el);
+  });
+  return wrap;
+}
+
+// =============================================================
+// 動作
+// =============================================================
+function markOK(id) {
+  const st = getSec(id);
+  if (st.status === "changed" || st.status === "commented") {
+    toast("此段已有變更/評論，無需再標 OK；產出時會自動含");
+    return;
+  }
+  setStatus(id, "ok");
+  toast("已標 OK");
+}
+function markChanged(id) {
+  setStatus(id, "changed");
+}
+function toggleComment(id) {
+  const ca = document.getElementById(`comment-${id}`);
+  const show = ca.style.display === "none";
+  ca.style.display = show ? "block" : "none";
+  if (show) ca.querySelector("textarea").focus();
+}
+function onComment(id, val) {
+  const st = getSec(id);
+  st.comment = val.trim();
+  if (st.comment) {
+    if (st.status !== "changed") setStatus(id, "commented");
+    else saveState();
+  } else if (st.status === "commented") {
+    setStatus(id, "pending");
+  }
+}
+function resetSection(id) {
+  if (!confirm("確定重置本段？所有變更與評論將清除。")) return;
+  delete state.sections[id];
+  saveState();
+  renderAll();
+}
+window.markOK = markOK;
+window.toggleComment = toggleComment;
+window.onComment = onComment;
+window.resetSection = resetSection;
+
+// =============================================================
+// TOC + header counts
+// =============================================================
+function refreshTOC() {
+  const toc = document.getElementById("toc-list");
+  toc.innerHTML = SECTIONS.map(s => {
+    const st = getSec(s.id);
+    return `<li><a href="#sec-${s.id}"><span>${escapeHtml(s.title)}</span><span class="status-dot ${st.status}"></span></a></li>`;
+  }).join("");
+}
+function refreshHeader() {
+  const cnt = { ok: 0, changed: 0, commented: 0, pending: 0 };
+  SECTIONS.forEach(s => cnt[getSec(s.id).status]++);
+  document.getElementById("cnt-ok").textContent = cnt.ok;
+  document.getElementById("cnt-changed").textContent = cnt.changed;
+  document.getElementById("cnt-commented").textContent = cnt.commented;
+  document.getElementById("cnt-pending").textContent = cnt.pending;
+  document.getElementById("action-count").textContent =
+    `${cnt.changed + cnt.commented} 項變更/評論`;
+}
+
+// =============================================================
+// 產出回饋
+// =============================================================
+function generateOutput() {
+  const lines = [];
+  lines.push("我已用 spec-review.html 互動審查完 SPEC.md，回饋如下：\n");
+
+  const hasAny = SECTIONS.some(s => {
+    const st = getSec(s.id);
+    return st.status === "changed" || st.status === "commented" || (st.status === "pending" && false);
+  });
+
+  SECTIONS.forEach(sec => {
+    const st = getSec(sec.id);
+    if (st.status === "ok") {
+      lines.push(`## ${sec.title}　✅ OK`);
+      lines.push("");
+      return;
+    }
+    if (st.status === "pending") {
+      lines.push(`## ${sec.title}　⏸ 未審`);
+      lines.push("");
+      return;
+    }
+    lines.push(`## ${sec.title}　${st.status === "changed" ? "⚠️ 有變更" : "💬 有評論"}`);
+
+    // detail per review type
+    if (sec.review === "kanban" && st.boundaries) {
+      const orig = sec.boundaries;
+      const cur = st.boundaries;
+      ["always", "askfirst", "never"].forEach(col => {
+        const colName = ({ always: "Always", askfirst: "Ask first", never: "Never" })[col];
+        const added = cur[col].filter(x => !orig[col].includes(x));
+        const removed = orig[col].filter(x => !cur[col].includes(x));
+        if (added.length) lines.push(`- ${colName} 新增：${added.map(x => `「${x}」`).join("、")}`);
+        if (removed.length) lines.push(`- ${colName} 移除：${removed.map(x => `「${x}」`).join("、")}`);
+      });
+    }
+    if (sec.review === "decisions" && st.decisions) {
+      sec.decisions.forEach((d, i) => {
+        const s = st.decisions[i];
+        if (s.current !== d.current) {
+          lines.push(`- ${d.q}（${d.title}）改成：${d.options[s.current].label}`);
+        }
+      });
+    }
+    if (sec.review === "edit-text" && st.prompt !== sec.promptDefault) {
+      lines.push("- 新版 prompt：");
+      lines.push("```");
+      lines.push(st.prompt);
+      lines.push("```");
+    }
+    if (sec.review === "checklist") {
+      const removed = (st.criteria || []).filter(c => !c.kept).map(c => c.text);
+      if (removed.length) lines.push(`- 移除驗收條件：${removed.map(x => `「${x}」`).join("、")}`);
+      if (st.added && st.added.length) lines.push(`- 新增驗收條件：${st.added.map(x => `「${x}」`).join("、")}`);
+    }
+    if (sec.review === "triage" && st.triage) {
+      const promote = st.triage.filter(q => q.status === "promote").map(q => q.text);
+      const drop = st.triage.filter(q => q.status === "drop").map(q => q.text);
+      if (promote.length) lines.push(`- 拉進 MVP：${promote.map(x => `「${x}」`).join("、")}`);
+      if (drop.length) lines.push(`- 刪除：${drop.map(x => `「${x}」`).join("、")}`);
+    }
+
+    if (st.comment) {
+      lines.push(`- 評論：${st.comment}`);
+    }
+    lines.push("");
+  });
+
+  lines.push("---");
+  lines.push("");
+  lines.push("請依以上回饋更新 SPEC.md。OK 與未審的段落不需改動。");
+
+  return lines.join("\n");
+}
+
+document.getElementById("gen-btn").onclick = () => {
+  const out = generateOutput();
+  document.getElementById("modal-content").textContent = out;
+  document.getElementById("modal").classList.add("show");
+};
+window.closeModal = () => document.getElementById("modal").classList.remove("show");
+window.copyOutput = () => {
+  const txt = document.getElementById("modal-content").textContent;
+  navigator.clipboard.writeText(txt);
+  toast("已複製到剪貼簿");
+};
+
+function toast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => t.classList.remove("show"), 1500);
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  }[c]));
+}
+
+// 初始化
+loadState();
+renderAll();
+</script>
+</body>
+</html>

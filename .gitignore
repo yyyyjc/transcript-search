@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+worker/node_modules/
+
+# Build / cache
+.wrangler/
+worker/.wrangler/
+
+# Claude Code 工作區設定（不公開）
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+
+# 環境變數備份（雖然我們本來就不該有 .env，但雙保險）
+.env
+.env.*
+*.key
