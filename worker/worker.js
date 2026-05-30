@@ -72,6 +72,18 @@ export default {
     }
 
     try {
+      // 0. IP rate limit（每 IP 每 60s 20 次；放在最前面攔截未授權的攻擊請求）
+      const clientIp = request.headers.get("CF-Connecting-IP") || "unknown";
+      if (env.RATE_LIMITER) {
+        const { success } = await env.RATE_LIMITER.limit({ key: clientIp });
+        if (!success) {
+          return jsonResponse(
+            { error: "rate_limited", message: "請求太快，請稍等幾秒再試" },
+            429
+          );
+        }
+      }
+
       // 1. 取 OAuth token
       const token = extractToken(request);
       if (!token) {

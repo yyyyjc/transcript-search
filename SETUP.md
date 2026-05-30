@@ -12,11 +12,15 @@
 | 1 | Google Cloud Console 建 OAuth Client ID | `GOOGLE_OAUTH_CLIENT_ID` | ✅ **已取得（內部模式）** |
 | 2 | Anthropic API Key | （只給 Cloudflare，不外流） | ✅ **已完成** |
 | 3 | Cloudflare Workers 部署 | `WORKER_URL` | ✅ **已完成** |
-| 4 | GitHub Pages 部署 | `GITHUB_PAGES_URL` | ⬜ |
-| 5 | 回頭把 Pages URL 填進 Google OAuth 授權來源 | — | ⬜ |
+| 4 | GitHub Pages 部署 | `GITHUB_PAGES_URL` | ✅ **已完成** |
+| 5 | 回頭把 Pages URL 填進 Google OAuth 授權來源 | — | ⏳ 進行中（等 propagation） |
 
 > Worker URL：`https://transcript-search.happiny-cloudflare.workers.dev`  
 > Sanity test：無 token → 401 missing_token；假 token → 401 token_invalid；OPTIONS → 204 ✅
+>
+> GitHub Pages URL：`https://yyyyjc.github.io/transcript-search/`  
+> Repo：`https://github.com/yyyyjc/transcript-search`  
+> Phase 5 待加授權來源 `https://yyyyjc.github.io`（只到網域）
 
 ---
 

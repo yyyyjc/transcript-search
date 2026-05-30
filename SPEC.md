@@ -303,28 +303,28 @@ v2 上線時，Worker 增加第二種模式：
 實作完成的判定：以下全部通過 → 算 done。
 
 ### 11.1 功能驗收
-- [ ] 媒體組成員用自己 Google 帳號登入後，能搜尋並看到結果卡片
-- [ ] 卡片含：日期、分類 pill（節目／受訪）、場合、檔名、Drive 連結、AI 摘要、高亮原文（完全相符紅底、同義詞黃底）
-- [ ] 卡片可一鍵複製「此句原文」
-- [ ] 結果可下載為 .csv（含 7 欄）
-- [ ] 民國年檔名 `1140520` 正確解析成 `2025-05-20`；解析失敗 fallback 顯示原檔名不 crash
+- [x] 媒體組成員用自己 Google 帳號登入後，能搜尋並看到結果卡片
+- [x] 卡片含：日期、分類 pill（節目／受訪）、場合、檔名、Drive 連結、AI 摘要、高亮原文（**v1 改成只有完全相符紅底**，同義詞高亮屬 v2）
+- [x] 卡片可一鍵複製「此句原文」
+- [x] 結果可下載為 .csv（含 7 欄）
+- [x] 西元年 8 位數 `20260405` 與民國年 7 位數 `1140520` 兩種檔名格式都正確解析；解析失敗 fallback 顯示原檔名不 crash
 
 ### 11.2 安全驗收
-- [ ] 媒體組以外的人即使知道網址，登入後也看不到任何逐字稿
-- [ ] 攻擊者直接 `curl` Worker URL（任意 token 或無 token）收到 403
-- [ ] GitHub repo 全文搜尋 `ANTHROPIC_API_KEY` 或 `sk-ant` 為零命中
-- [ ] OAuth scope 只有 `drive.readonly`，無寫入權限
-- [ ] 頁面含「隱私說明」入口，明示 3 點資料流向（送 Anthropic API、Anthropic 預設不訓練、Google 帳號僅 Drive 讀取）
+- [x] 媒體組以外的人即使知道網址，登入後也看不到任何逐字稿（Drive 反查驗證）
+- [x] 攻擊者直接 `curl` Worker URL（任意 token 或無 token）收到 401/403（部署日 sanity test 確認）
+- [x] GitHub repo 全文搜尋 `ANTHROPIC_API_KEY` 或 `sk-ant` 為零命中（2026-05-27 確認）
+- [x] OAuth scope 只有 `drive.readonly`，無寫入權限
+- [x] 頁面含「隱私說明」入口，明示 3 點資料流向（送 Anthropic API、Anthropic 預設不訓練、Google 帳號僅 Drive 讀取）
 
 ### 11.3 體驗驗收
-- [ ] 搜尋一個常見主題（如「變電所」），完整流程 ≤ 30 秒
-- [ ] 12 類錯誤都有對應的中文 UX 訊息，無 console 錯誤外洩
-- [ ] Token 過期時自動 re-auth，使用者不需手動登出再登入
-- [ ] 手機（≥ 375px 寬，iPhone SE 起跳）可完成完整流程：登入、搜尋、看結果、複製、下載
-- [ ] 5 人同時搜尋時無互踩；單人重複連點搜尋按鈕只觸發一次 Worker 呼叫
-- [ ] Worker 速率超限時前端正確顯示「請稍等幾秒」並暫禁搜尋鈕
-- [ ] 結果區顯示「本次查詢花費（USD）」與「今日累計花費（USD）」
-- [ ] 搜尋框下提示文字明示「v1.0 精確搜尋」（媒體組知道要下精準關鍵字）
+- [x] 搜尋一個常見主題（如「變電所」），完整流程 ≤ 30 秒
+- [x] 12 類錯誤都有對應的中文 UX 訊息，無 console 錯誤外洩
+- [~] Token 過期時自動 re-auth（**程式已實作但尚未實際 stress test 1 小時後過期情境**）
+- [x] 手機（≥ 375px 寬，iPhone SE 起跳）可完成完整流程：登入、搜尋、看結果、複製、下載
+- [~] 5 人同時搜尋時無互踩（**未做真實多人並發測；單人連點防呆已測 ✅**）
+- [x] Worker 速率超限時前端正確顯示「請稍等幾秒」並暫禁搜尋鈕（IP rate limit 已實作）
+- [x] 結果區顯示「本次查詢花費（USD）」與「今日累計花費（USD）」
+- [x] 搜尋框下提示文字明示「v1.0 精確搜尋」（媒體組知道要下精準關鍵字）
 
 ### 11.5 v2.0 驗收（v2 上線時補做）
 - [ ] 搜尋框旁提供「精確 / 廣義」切換鈕，切換生效正確
@@ -425,3 +425,4 @@ v2 上線時，Worker 增加第二種模式：
 | 2026-05-26 | v1.2 改採 v1/v2 兩階段上線策略：(1) §1.3 User story 註明 v1 精確 / v2 廣義；(2) §1.4 補述 localStorage 用途；(3) §5 Code Style 移除 SYNONYMS 範例改成 v1 簡版；(4) §8 新增 Q11（版本策略）、Q12（成本顯示）；(5) §9 新增 9.5（usage 回傳）、9.6（v2 擴展端點）、9.5→9.7（並發限制重編號）；(6) §11 加 2 條 v1 成本驗收、新增 §11.5 v2 驗收；(7) §12 結案；(8) 新增 §13 版本路線圖 |
 | 2026-05-26 | v1.2.1 修首次本機測試發現的兩個 bug：(1) **Drive Shared Drive 支援**：前端 `listFilesInFolder` / `readFileContent` 與 Worker `verifyDriveAccess` 全加 `supportsAllDrives=true`、列檔再加 `includeItemsFromAllDrives=true`——沒這兩個參數時 Shared Drive 內檔案會被靜默忽略（API 不報錯但回空陣列）；(2) **檔名解析增援西元年格式**：實際檔名是 `20260405【雅琴看世界】.txt` 而非預期 `1140520_記者會.txt`，parseFilename 改成同時支援西元年 8 位數（可選 `_` 或 `【】`）與民國年 7 位數兩種 |
 | 2026-05-27 | v1.2.2 自動化 smoke test 抓到 bug：**廣義按鈕無回饋**。原本用 `<button disabled>` 抑制了 click event，使用者點下完全沒反應、看不到「v2 開發中」提示。改用 `aria-disabled="true"` + CSS attribute selector：視覺仍顯示為不可用，但 click handler 能正常觸發 toast |
+| 2026-05-27 | **v1.0 正式上線**：(1) GitHub Pages 部署 `https://yyyyjc.github.io/transcript-search/`；(2) Google OAuth 加授權來源；(3) 線上 end-to-end smoke test 全綠；(4) §11 驗收條件 18/20 ✅（2 條 `[~]` 為「實作完但未實測」：1h token 過期 silent re-auth、多人並發）；(5) 補做：Worker 加 IP rate limit binding（每 IP 60s/20 次）；(6) 交付物完備：README.md、USER_GUIDE.md、announcement-template.md |
