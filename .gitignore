@@ -21,3 +21,11 @@ Thumbs.db
 .env
 .env.*
 *.key
+
+# === 內部規劃文件（不公開到 GitHub，僅本機保留）===
+SPEC.md
+SETUP.md
+chat_to_code_HANDOFF.md
+USER_GUIDE.md
+announcement-template.md
+spec-review.html
